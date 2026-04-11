@@ -1,7 +1,7 @@
 {
-  "name": "VoiceList",
-  "short_name": "VoiceList",
-  "description": "Voice-controlled list manager synced with Google Tasks",
+  "name": "VoiceTodo",
+  "short_name": "VoiceTodo",
+  "description": "Voice-controlled todo manager synced with Google Tasks",
   "start_url": "/index.html",
   "display": "standalone",
   "background_color": "#0b0f18",
