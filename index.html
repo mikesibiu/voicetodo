@@ -403,14 +403,58 @@
       padding: 8px 0;
       border-bottom: 1px solid var(--border);
       font-size: 13.5px; color: var(--text);
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
     }
     .task-row:last-child { border-bottom: none; }
-    .task-dot {
-      width: 7px; height: 7px;
+    .task-row.completed span { text-decoration: line-through; opacity: .45; }
+    .task-check {
+      width: 20px; height: 20px;
       border-radius: 50%;
-      background: var(--muted);
+      border: 2px solid var(--muted);
       flex-shrink: 0;
-      opacity: .5;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: background .15s, border-color .15s;
+    }
+    .task-check:active { transform: scale(.9); }
+    .task-row.completed .task-check {
+      background: var(--green);
+      border-color: var(--green);
+    }
+    .task-check svg { display: none; }
+    .task-row.completed .task-check svg { display: block; }
+    .completed-toggle {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--muted);
+      padding: 6px 0 2px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .completed-toggle svg { transition: transform .2s; }
+    .completed-toggle.open svg { transform: rotate(90deg); }
+    .completed-section { display: none; }
+    .completed-section.open { display: block; }
+    .ctx-menu {
+      position: fixed;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      z-index: 999;
+      min-width: 160px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.4);
+    }
+    .ctx-item {
+      padding: 12px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      color: var(--text);
+    }
+    .ctx-item:active { background: var(--surface2); }
+    .ctx-item.danger { color: #ff5f5f; }
+    .ctx-backdrop {
+      position: fixed; inset: 0; z-index: 998;
     }
 
     .sub-msg {
@@ -743,8 +787,22 @@ async function getLists() {
 }
 
 async function getTasksForList(lid) {
-  const d = await api(`https://tasks.googleapis.com/tasks/v1/lists/${lid}/tasks?showCompleted=false&maxResults=100`);
+  const d = await api(`https://tasks.googleapis.com/tasks/v1/lists/${lid}/tasks?showCompleted=true&maxResults=100`);
   return (d.items || []).filter(t => !t.parent);
+}
+
+async function completeTask(lid, tid) {
+  return api(`https://tasks.googleapis.com/tasks/v1/lists/${lid}/tasks/${tid}`, {
+    method: 'PATCH', body: JSON.stringify({ status: 'completed' })
+  });
+}
+
+async function deleteTask(lid, tid) {
+  return api(`https://tasks.googleapis.com/tasks/v1/lists/${lid}/tasks/${tid}`, { method: 'DELETE' });
+}
+
+async function deleteList(lid) {
+  return api(`https://tasks.googleapis.com/tasks/v1/users/@me/lists/${lid}`, { method: 'DELETE' });
 }
 
 async function createList(title) {
@@ -786,7 +844,7 @@ function renderLists(newId = null) {
   }
   c.innerHTML = ST.lists.map(l => `
     <div class="list-card${l.id === newId ? ' new highlight' : ''}" id="lc-${l.id}">
-      <div class="list-row" onclick="toggleList('${l.id}')">
+      <div class="list-row" id="lr-${l.id}" onclick="toggleList('${l.id}')">
         <div class="list-ico">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
@@ -800,10 +858,12 @@ function renderLists(newId = null) {
           <polyline points="9,18 15,12 9,6"/>
         </svg>
       </div>
-      <div class="task-area" id="ta-${l.id}">
-        <div class="sub-msg">Loading tasks…</div>
-      </div>
+      <div class="task-area" id="ta-${l.id}"></div>
     </div>`).join('');
+
+  ST.lists.forEach(l => {
+    attachLongPress($(`lr-${l.id}`), () => showListMenu(l.id, $(`lr-${l.id}`)));
+  });
 }
 
 async function toggleList(lid) {
@@ -811,15 +871,69 @@ async function toggleList(lid) {
   const area = $(`ta-${lid}`);
   if (card.classList.contains('open')) { card.classList.remove('open'); return; }
   card.classList.add('open');
+  await loadTasksIntoArea(lid, area);
+}
+
+async function loadTasksIntoArea(lid, area) {
   area.innerHTML = '<div class="sub-msg">Loading tasks…</div>';
   try {
     const tasks = await getTasksForList(lid);
-    if (!tasks.length) { area.innerHTML = '<div class="sub-msg">No tasks yet</div>'; return; }
-    area.innerHTML = tasks.map(t =>
-      `<div class="task-row"><div class="task-dot"></div><span>${esc(t.title)}</span></div>`
-    ).join('');
+    renderTaskArea(lid, area, tasks);
   } catch (e) {
     area.innerHTML = `<div class="sub-msg">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderTaskArea(lid, area, tasks) {
+  const active = tasks.filter(t => t.status !== 'completed');
+  const done   = tasks.filter(t => t.status === 'completed');
+
+  const taskRow = (t) => `
+    <div class="task-row${t.status === 'completed' ? ' completed' : ''}" id="tr-${t.id}" data-tid="${t.id}" data-lid="${lid}">
+      <div class="task-check" onclick="onCheckTask(event,'${lid}','${t.id}')">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round">
+          <polyline points="2,6 5,9 10,3"/>
+        </svg>
+      </div>
+      <span>${esc(t.title)}</span>
+    </div>`;
+
+  let html = active.length ? active.map(taskRow).join('') : '<div class="sub-msg">No tasks yet</div>';
+
+  if (done.length) {
+    html += `
+      <div class="completed-toggle" onclick="toggleCompleted(this)">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9,18 15,12 9,6"/></svg>
+        ${done.length} completed
+      </div>
+      <div class="completed-section">${done.map(taskRow).join('')}</div>`;
+  }
+
+  area.innerHTML = html;
+
+  // attach long-press to each task row
+  area.querySelectorAll('.task-row').forEach(row => {
+    attachLongPress(row, () => showTaskMenu(row.dataset.lid, row.dataset.tid, row));
+  });
+}
+
+function toggleCompleted(btn) {
+  btn.classList.toggle('open');
+  btn.nextElementSibling.classList.toggle('open');
+}
+
+async function onCheckTask(e, lid, tid) {
+  e.stopPropagation();
+  const row = $(`tr-${tid}`);
+  row.classList.add('completed');
+  try {
+    await completeTask(lid, tid);
+    const area = row.closest('.task-area');
+    const tasks = await getTasksForList(lid);
+    renderTaskArea(lid, area, tasks);
+  } catch(err) {
+    row.classList.remove('completed');
+    toast('Error updating task');
   }
 }
 
@@ -1035,6 +1149,82 @@ function toast(msg) {
 
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── LONG PRESS ────────────────────────────────────
+function attachLongPress(el, cb) {
+  let timer = null;
+  el.addEventListener('pointerdown', e => {
+    timer = setTimeout(() => { timer = null; cb(e); }, 500);
+  });
+  el.addEventListener('pointerup',    () => { if (timer) { clearTimeout(timer); timer = null; } });
+  el.addEventListener('pointercancel',() => { if (timer) { clearTimeout(timer); timer = null; } });
+  el.addEventListener('pointermove',  () => { if (timer) { clearTimeout(timer); timer = null; } });
+}
+
+// ── CONTEXT MENU ──────────────────────────────────
+function showCtxMenu(items, x, y) {
+  closeCtxMenu();
+  const bd = document.createElement('div');
+  bd.className = 'ctx-backdrop';
+  bd.onclick = closeCtxMenu;
+  const menu = document.createElement('div');
+  menu.className = 'ctx-menu';
+  menu.id = 'ctx-menu';
+  items.forEach(({ label, danger, action }) => {
+    const d = document.createElement('div');
+    d.className = 'ctx-item' + (danger ? ' danger' : '');
+    d.textContent = label;
+    d.onclick = () => { closeCtxMenu(); action(); };
+    menu.appendChild(d);
+  });
+  document.body.appendChild(bd);
+  document.body.appendChild(menu);
+  // position near tap but keep on screen
+  const mw = 160, mh = items.length * 44;
+  menu.style.left = Math.min(x, window.innerWidth - mw - 8) + 'px';
+  menu.style.top  = Math.min(y, window.innerHeight - mh - 8) + 'px';
+}
+
+function closeCtxMenu() {
+  document.getElementById('ctx-menu')?.remove();
+  document.querySelector('.ctx-backdrop')?.remove();
+}
+
+function showTaskMenu(lid, tid, row) {
+  const isDone = row.classList.contains('completed');
+  const items = [];
+  if (!isDone) items.push({ label: '✓ Mark complete', action: () => onCheckTask({ stopPropagation:()=>{} }, lid, tid) });
+  items.push({ label: '🗑 Delete task', danger: true, action: () => onDeleteTask(lid, tid, row) });
+  const rect = row.getBoundingClientRect();
+  showCtxMenu(items, rect.left + 20, rect.bottom);
+}
+
+async function onDeleteTask(lid, tid, row) {
+  try {
+    await deleteTask(lid, tid);
+    const area = row.closest('.task-area');
+    const tasks = await getTasksForList(lid);
+    renderTaskArea(lid, area, tasks);
+    toast('Task deleted');
+  } catch(e) { toast('Error deleting task'); }
+}
+
+function showListMenu(lid, listRow) {
+  const items = [
+    { label: '🗑 Delete list', danger: true, action: () => onDeleteList(lid) }
+  ];
+  const rect = listRow.getBoundingClientRect();
+  showCtxMenu(items, rect.left + 20, rect.bottom);
+}
+
+async function onDeleteList(lid) {
+  try {
+    await deleteList(lid);
+    ST.lists = await getLists();
+    renderLists();
+    toast('List deleted');
+  } catch(e) { toast('Error deleting list'); }
 }
 
 // ── SERVICE WORKER ────────────────────────────────
