@@ -2,7 +2,7 @@
   "name": "VoiceTodo",
   "short_name": "VoiceTodo",
   "description": "Voice-controlled todo manager synced with Google Tasks",
-  "start_url": "/index.html",
+  "start_url": "/voicetodo/index.html",
   "display": "standalone",
   "background_color": "#0b0f18",
   "theme_color": "#0b0f18",

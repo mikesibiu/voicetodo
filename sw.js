@@ -1,4 +1,4 @@
-const CACHE = 'voicetodo-v2';
+const CACHE = 'voicetodo-v3';
 const PRECACHE = ['/index.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', e => {
