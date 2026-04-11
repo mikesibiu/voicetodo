@@ -746,26 +746,32 @@ function signIn() {
   tokenClient.requestAccessToken();
 }
 
+let tokenRefreshPromise = null;
+
 async function ensureToken() {
   if (ST.token && Date.now() < ST.tokenExpiry) return ST.token;
-  return new Promise((ok, fail) => {
-    const prev = tokenClient.callback;
+  if (!tokenClient) throw new Error('auth_not_ready');
+  if (tokenRefreshPromise) return tokenRefreshPromise;
+  tokenRefreshPromise = new Promise((ok, fail) => {
     tokenClient.callback = r => {
-      tokenClient.callback = prev;
+      tokenRefreshPromise = null;
       if (r.error) { fail(new Error(r.error)); return; }
       ST.token = r.access_token;
-      ST.tokenExpiry = Date.now() + (parseInt(r.expires_in) * 1000) - 60000;
+      const exp = parseInt(r.expires_in) || 3600;
+      ST.tokenExpiry = Date.now() + (exp * 1000) - 60000;
       ok(ST.token);
     };
     tokenClient.requestAccessToken({ prompt: '' });
   });
+  return tokenRefreshPromise;
 }
 
 function handleLogout() {
   if (!confirm('Sign out and clear saved settings?')) return;
+  const t = ST.token;
   localStorage.removeItem('vl_cid');
   ST.clientId = ''; ST.token = null; ST.lists = [];
-  try { google.accounts.oauth2.revoke(ST.token, () => {}); } catch {}
+  try { google.accounts.oauth2.revoke(t, () => {}); } catch {}
   showSetup();
 }
 
@@ -1159,10 +1165,11 @@ function esc(s) {
 
 // ── LONG PRESS ────────────────────────────────────
 function attachLongPress(el, cb) {
-  let timer = null, startX = 0, startY = 0;
+  let timer = null, startX = 0, startY = 0, fired = false;
   el.addEventListener('pointerdown', e => {
+    fired = false;
     startX = e.clientX; startY = e.clientY;
-    timer = setTimeout(() => { timer = null; cb(e); }, 500);
+    timer = setTimeout(() => { timer = null; fired = true; cb(e); }, 500);
   });
   el.addEventListener('pointerup',    () => { if (timer) { clearTimeout(timer); timer = null; } });
   el.addEventListener('pointercancel',() => { if (timer) { clearTimeout(timer); timer = null; } });
@@ -1171,6 +1178,9 @@ function attachLongPress(el, cb) {
     const dx = e.clientX - startX, dy = e.clientY - startY;
     if (Math.sqrt(dx*dx + dy*dy) > 10) { clearTimeout(timer); timer = null; }
   });
+  el.addEventListener('click', e => {
+    if (fired) { fired = false; e.stopImmediatePropagation(); e.preventDefault(); }
+  }, true);
 }
 
 // ── CONTEXT MENU ──────────────────────────────────
@@ -1231,6 +1241,9 @@ function showListMenu(lid, listRow) {
 }
 
 async function onDeleteList(lid) {
+  const list = ST.lists.find(l => l.id === lid);
+  const name = list ? list.title : 'this list';
+  if (!confirm(`Delete "${name}" and all its tasks? This cannot be undone.`)) return;
   try {
     await deleteList(lid);
     ST.lists = await getLists();
@@ -1242,7 +1255,10 @@ async function onDeleteList(lid) {
 // ── SERVICE WORKER ────────────────────────────────
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
+  let swReloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (swReloading) return;
+    swReloading = true;
     window.location.reload();
   });
 }
