@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0b0f18">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <title>VoiceList</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://accounts.google.com/gsi/client" async></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0b0f18;
+      --surface:   #131a27;
+      --surface2:  #1b2437;
+      --border:    rgba(255,255,255,0.07);
+      --text:      #dde6f0;
+      --muted:     #5a6a85;
+      --green:     #1fd874;
+      --green-bg:  rgba(31,216,116,0.10);
+      --red:       #f05050;
+      --amber:     #f5a623;
+      --radius:    16px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── SCREENS ─────────────────────────────────── */
+    .screen {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      transition: opacity .25s ease, transform .25s ease;
+    }
+    .screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(16px);
+    }
+
+    /* ── SETUP SCREEN ────────────────────────────── */
+    #screen-setup {
+      padding: 48px 24px 32px;
+      overflow-y: auto;
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .logo-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    .logo-wrap svg { width: 60px; height: 60px; }
+    .logo-wrap h1 {
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .logo-wrap h1 span { color: var(--green); }
+    .logo-wrap p {
+      font-size: 14px;
+      color: var(--muted);
+      text-align: center;
+      font-style: italic;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .step {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+    .step:last-child { margin-bottom: 0; }
+    .step-n {
+      min-width: 22px; height: 22px;
+      background: var(--green-bg);
+      color: var(--green);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700;
+      margin-top: 2px;
+    }
+    .step p { font-size: 13.5px; color: var(--text); line-height: 1.55; }
+    .step p a { color: var(--green); text-decoration: none; font-weight: 500; }
+    .step p strong { font-weight: 600; }
+    .step p code {
+      background: var(--surface2);
+      padding: 1px 6px; border-radius: 4px;
+      font-family: monospace; font-size: 12px;
+    }
+
+    .field-label {
+      font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 1px;
+      color: var(--muted); margin-bottom: 8px;
+    }
+    .field {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      color: var(--text);
+      font-family: 'Outfit', sans-serif;
+      font-size: 14px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .field:focus { border-color: var(--green); }
+    .field::placeholder { color: var(--muted); opacity: .6; }
+
+    .btn {
+      background: var(--green);
+      color: #0b0f18;
+      border: none;
+      border-radius: 12px;
+      padding: 16px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: .3px;
+      transition: opacity .15s, transform .1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:active { opacity: .8; transform: scale(.98); }
+    .btn:disabled { opacity: .4; }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 12px;
+      padding: 14px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background .2s, color .2s;
+    }
+    .btn-ghost:active { background: var(--surface2); color: var(--text); }
+
+    /* ── MAIN SCREEN ─────────────────────────────── */
+    #screen-main { height: 100%; }
+
+    .app-header {
+      padding: 20px 24px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .app-name {
+      font-size: 22px; font-weight: 700; letter-spacing: -.3px;
+    }
+    .app-name em { color: var(--green); font-style: normal; }
+
+    .icon-btn {
+      width: 38px; height: 38px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: var(--muted);
+      transition: background .2s, color .2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .icon-btn:active { background: var(--surface2); color: var(--text); }
+
+    /* CONNECT OVERLAY */
+    #connect-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(11,15,24,.92);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 50;
+      padding: 32px;
+      backdrop-filter: blur(4px);
+    }
+    #connect-overlay.hidden { display: none; }
+    #connect-overlay p {
+      font-size: 15px; color: var(--muted);
+      text-align: center; line-height: 1.6; max-width: 260px;
+    }
+    #connect-overlay .btn { width: 100%; max-width: 280px; }
+
+    /* MIC SECTION */
+    .mic-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 24px 16px;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+
+    .mic-wrap {
+      position: relative;
+      width: 130px; height: 130px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .ring {
+      position: absolute;
+      border-radius: 50%;
+      border: 1.5px solid var(--green);
+      opacity: 0;
+    }
+    .ring-1 { width: 100%; height: 100%; }
+    .ring-2 { width: 122%; height: 122%; left: -11%; top: -11%; }
+    .ring-3 { width: 144%; height: 144%; left: -22%; top: -22%; }
+
+    .listening .ring-1 { animation: ripple 1.6s ease-out infinite; }
+    .listening .ring-2 { animation: ripple 1.6s ease-out .28s infinite; }
+    .listening .ring-3 { animation: ripple 1.6s ease-out .56s infinite; }
+
+    @keyframes ripple {
+      0%   { opacity: .7; transform: scale(.92); }
+      100% { opacity: 0;  transform: scale(1.06); }
+    }
+
+    .mic-btn {
+      width: 94px; height: 94px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      position: relative; z-index: 1;
+      transition: background .2s, border-color .2s, transform .1s, box-shadow .2s;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .mic-btn:active { transform: scale(.93); }
+    .listening .mic-btn {
+      background: var(--green-bg);
+      border-color: var(--green);
+      box-shadow: 0 0 30px rgba(31,216,116,.15);
+    }
+    .mic-btn svg { color: var(--muted); transition: color .2s; }
+    .listening .mic-btn svg { color: var(--green); }
+
+    .mic-label {
+      font-size: 14px; font-weight: 500; color: var(--muted);
+      text-align: center;
+      transition: color .2s;
+      min-height: 21px;
+    }
+    .listening .mic-label { color: var(--green); }
+
+    /* RESULT CARD */
+    .result-card {
+      margin: 0 24px;
+      padding: 12px 15px;
+      background: var(--surface);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      display: none;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      line-height: 1.45;
+      flex-shrink: 0;
+      transition: border-color .25s;
+      min-height: 48px;
+    }
+    .result-card.success { border-color: rgba(31,216,116,.35); }
+    .result-card.error   { border-color: rgba(240,80,80,.35); }
+    .result-card.loading { border-color: rgba(245,166,35,.35); }
+    .result-icon { min-width: 20px; display: flex; align-items: center; justify-content: center; }
+    .result-text { flex: 1; color: var(--text); }
+
+    /* LISTS */
+    .lists-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 24px 32px;
+    }
+    .lists-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .section-label {
+      font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 1.2px;
+      color: var(--muted);
+    }
+    .refresh-btn {
+      width: 30px; height: 30px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: var(--muted);
+      transition: background .2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .refresh-btn:active { background: var(--surface2); }
+
+    .list-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+    .list-card.highlight {
+      border-color: rgba(31,216,116,.4);
+      animation: fadeBorder 2.5s ease-out forwards;
+    }
+    @keyframes fadeBorder {
+      0%   { border-color: rgba(31,216,116,.7); }
+      100% { border-color: var(--border); }
+    }
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .list-card.new { animation: slideDown .3s ease-out; }
+
+    .list-row {
+      display: flex; align-items: center;
+      padding: 13px 15px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      gap: 11px;
+    }
+    .list-ico {
+      width: 30px; height: 30px;
+      background: var(--green-bg);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--green);
+      flex-shrink: 0;
+    }
+    .list-title { flex: 1; font-size: 15px; font-weight: 500; }
+    .list-badge {
+      font-size: 11px; color: var(--muted);
+      background: var(--surface2);
+      padding: 2px 8px; border-radius: 20px;
+      flex-shrink: 0;
+    }
+    .list-arrow {
+      color: var(--muted);
+      transition: transform .2s;
+      flex-shrink: 0;
+    }
+    .list-card.open .list-arrow { transform: rotate(90deg); }
+
+    .task-area {
+      display: none;
+      padding: 0 15px 12px;
+      border-top: 1px solid var(--border);
+    }
+    .list-card.open .task-area { display: block; }
+
+    .task-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13.5px; color: var(--text);
+    }
+    .task-row:last-child { border-bottom: none; }
+    .task-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+      opacity: .5;
+    }
+
+    .sub-msg {
+      padding: 10px 0;
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 36px 20px;
+      color: var(--muted);
+    }
+    .empty-state svg { opacity: .35; margin-bottom: 10px; }
+    .empty-state p { font-size: 14px; line-height: 1.7; }
+    .empty-state em { color: var(--text); }
+
+    /* SPINNER */
+    .spin {
+      width: 15px; height: 15px;
+      border: 2px solid var(--border);
+      border-top-color: var(--amber);
+      border-radius: 50%;
+      animation: rotate .65s linear infinite;
+    }
+    @keyframes rotate { to { transform: rotate(360deg); } }
+
+    /* TOAST */
+    #toasts {
+      position: fixed;
+      bottom: 24px; left: 24px; right: 24px;
+      z-index: 200;
+      pointer-events: none;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .toast {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 11px 15px;
+      font-size: 13.5px;
+      animation: toastSlide .25s ease-out;
+    }
+    @keyframes toastSlide {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!--  SCREEN 1 — SETUP                              -->
+<!-- ═══════════════════════════════════════════════ -->
+<div id="screen-setup" class="screen">
+
+  <div class="logo-wrap">
+    <svg viewBox="0 0 60 60" fill="none">
+      <circle cx="30" cy="30" r="30" fill="#131a27"/>
+      <rect x="24" y="12" width="12" height="18" rx="6" fill="#1fd874"/>
+      <path d="M18 30a12 12 0 0024 0" stroke="#1fd874" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+      <line x1="30" y1="42" x2="30" y2="48" stroke="#1fd874" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="24" y1="48" x2="36" y2="48" stroke="#1fd874" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>
+    <h1>Voice<span>List</span></h1>
+    <p>"add milk to my shopping list"</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">One-time Google Setup</div>
+    <div class="step">
+      <div class="step-n">1</div>
+      <p>Go to <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a> and create a new project</p>
+    </div>
+    <div class="step">
+      <div class="step-n">2</div>
+      <p>Go to <strong>APIs &amp; Services → Library</strong>, search <strong>Tasks API</strong>, and click <strong>Enable</strong></p>
+    </div>
+    <div class="step">
+      <div class="step-n">3</div>
+      <p>Go to <strong>Credentials → Create Credentials → OAuth 2.0 Client ID</strong>, choose <strong>Web application</strong></p>
+    </div>
+    <div class="step">
+      <div class="step-n">4</div>
+      <p>Under <strong>Authorized JavaScript origins</strong> add the URL where this app is hosted (e.g. <code>https://yourdomain.com</code>)</p>
+    </div>
+    <div class="step">
+      <div class="step-n">5</div>
+      <p>Copy the <strong>Client ID</strong> (ends in <code>.apps.googleusercontent.com</code>) and paste below</p>
+    </div>
+  </div>
+
+  <div>
+    <div class="field-label">Google OAuth Client ID</div>
+    <input id="inp-clientid" class="field" type="text"
+      placeholder="xxxxxxxxx.apps.googleusercontent.com"
+      autocomplete="off" autocorrect="off" spellcheck="false">
+  </div>
+
+  <button class="btn" onclick="setupSubmit()">Connect to Google Tasks →</button>
+
+  <button class="btn-ghost" onclick="showHelp()" style="margin-top:-4px">
+    Need help? What is hosting?
+  </button>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<!--  SCREEN 2 — MAIN APP                           -->
+<!-- ═══════════════════════════════════════════════ -->
+<div id="screen-main" class="screen hidden">
+
+  <!-- sign-in gate -->
+  <div id="connect-overlay">
+    <svg width="52" height="52" viewBox="0 0 60 60" fill="none">
+      <rect x="22" y="10" width="12" height="18" rx="6" fill="#1fd874"/>
+      <path d="M16 28a14 14 0 0028 0" stroke="#1fd874" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+      <line x1="30" y1="42" x2="30" y2="49" stroke="#1fd874" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="23" y1="49" x2="37" y2="49" stroke="#1fd874" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>
+    <p>Sign in to connect VoiceList with your Google Tasks account</p>
+    <button class="btn" onclick="signIn()">Sign in with Google</button>
+    <button class="btn-ghost" onclick="showSetup()" style="width:100%;max-width:280px;margin-top:-8px">
+      ← Change settings
+    </button>
+  </div>
+
+  <div class="app-header">
+    <div class="app-name">Voice<em>List</em></div>
+    <div class="icon-btn" onclick="handleLogout()" title="Sign out">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+        <polyline points="16,17 21,12 16,7"/>
+        <line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+    </div>
+  </div>
+
+  <div id="mic-section" class="mic-section">
+    <div id="mic-wrap" class="mic-wrap">
+      <div class="ring ring-1"></div>
+      <div class="ring ring-2"></div>
+      <div class="ring ring-3"></div>
+      <div id="mic-btn" class="mic-btn" onclick="toggleListening()">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="9" y="2" width="6" height="11" rx="3"/>
+          <path d="M19 10v2a7 7 0 01-14 0v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+          <line x1="12" y1="19" x2="12" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+          <line x1="8" y1="22" x2="16" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+        </svg>
+      </div>
+    </div>
+    <div id="mic-label" class="mic-label">Tap to speak</div>
+  </div>
+
+  <div id="result-card" class="result-card">
+    <div class="result-icon" id="result-icon"></div>
+    <div class="result-text" id="result-text"></div>
+  </div>
+
+  <div class="lists-area">
+    <div class="lists-top">
+      <div class="section-label">Your Lists</div>
+      <div class="refresh-btn" onclick="loadLists()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <path d="M23 4v6h-6M1 20v-6h6"/>
+          <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+        </svg>
+      </div>
+    </div>
+    <div id="lists-container"></div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!--  JAVASCRIPT                                    -->
+<!-- ═══════════════════════════════════════════════ -->
+<script>
+// ── STATE ─────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const ST = {
+  clientId:    localStorage.getItem('vl_cid') || '',
+  token:       null,
+  tokenExpiry: 0,
+  lists:       [],
+  listening:   false,
+  recog:       null
+};
+
+let tokenClient = null;
+
+// ── INIT ──────────────────────────────────────────
+window.addEventListener('load', () => {
+  if (ST.clientId) {
+    showMain();
+    waitForGIS().then(() => {
+      initOAuth(ST.clientId);
+    }).catch(() => toast('Could not load Google auth. Check connection.'));
+  } else {
+    showSetup();
+  }
+});
+
+function waitForGIS(ms = 8000) {
+  return new Promise((ok, fail) => {
+    if (typeof google !== 'undefined' && google.accounts) { ok(); return; }
+    const t = Date.now();
+    const iv = setInterval(() => {
+      if (typeof google !== 'undefined' && google.accounts) { clearInterval(iv); ok(); }
+      else if (Date.now() - t > ms) { clearInterval(iv); fail(); }
+    }, 80);
+  });
+}
+
+// ── SCREENS ───────────────────────────────────────
+function showSetup() {
+  $('screen-setup').classList.remove('hidden');
+  $('screen-main').classList.add('hidden');
+  if (ST.clientId) $('inp-clientid').value = ST.clientId;
+}
+
+function showMain() {
+  $('screen-setup').classList.add('hidden');
+  $('screen-main').classList.remove('hidden');
+  $('connect-overlay').classList.remove('hidden');
+}
+
+function showConnectOverlay(show) {
+  $('connect-overlay').classList.toggle('hidden', !show);
+}
+
+// ── SETUP ─────────────────────────────────────────
+function setupSubmit() {
+  const id = $('inp-clientid').value.trim();
+  if (!id || !id.includes('.apps.googleusercontent.com')) {
+    toast('Paste a valid Client ID ending in .apps.googleusercontent.com'); return;
+  }
+  ST.clientId = id;
+  localStorage.setItem('vl_cid', id);
+  showMain();
+  waitForGIS().then(() => initOAuth(id)).catch(() => toast('Google auth failed to load'));
+}
+
+function showHelp() {
+  alert(
+    "HOSTING means you need to put these files on a web server so the app has a URL.\n\n" +
+    "The easiest free option:\n" +
+    "1. Create a free account at github.com\n" +
+    "2. Create a repository and upload these files\n" +
+    "3. Enable GitHub Pages (Settings → Pages → main branch)\n" +
+    "4. Your URL will be: https://yourusername.github.io/repo-name\n\n" +
+    "Use that URL in the Google Console setup."
+  );
+}
+
+// ── OAUTH ─────────────────────────────────────────
+function initOAuth(clientId) {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: 'https://www.googleapis.com/auth/tasks',
+    callback: onToken
+  });
+}
+
+function onToken(r) {
+  if (r.error) {
+    if (r.error !== 'user_closed_window' && r.error !== 'access_denied') {
+      toast('Sign-in error: ' + r.error);
+    }
+    return;
+  }
+  ST.token = r.access_token;
+  ST.tokenExpiry = Date.now() + (parseInt(r.expires_in) * 1000) - 60000;
+  showConnectOverlay(false);
+  loadLists();
+}
+
+function signIn() {
+  if (!tokenClient) { toast('Auth not ready, wait a moment'); return; }
+  tokenClient.requestAccessToken();
+}
+
+async function ensureToken() {
+  if (ST.token && Date.now() < ST.tokenExpiry) return ST.token;
+  return new Promise((ok, fail) => {
+    const prev = tokenClient.callback;
+    tokenClient.callback = r => {
+      tokenClient.callback = prev;
+      if (r.error) { fail(new Error(r.error)); return; }
+      ST.token = r.access_token;
+      ST.tokenExpiry = Date.now() + (parseInt(r.expires_in) * 1000) - 60000;
+      ok(ST.token);
+    };
+    tokenClient.requestAccessToken({ prompt: '' });
+  });
+}
+
+function handleLogout() {
+  if (!confirm('Sign out and clear saved settings?')) return;
+  localStorage.removeItem('vl_cid');
+  ST.clientId = ''; ST.token = null; ST.lists = [];
+  try { google.accounts.oauth2.revoke(ST.token, () => {}); } catch {}
+  showSetup();
+}
+
+// ── TASKS API ─────────────────────────────────────
+async function api(url, opts = {}) {
+  const t = await ensureToken();
+  const r = await fetch(url, {
+    ...opts,
+    headers: { 'Authorization': `Bearer ${t}`, 'Content-Type': 'application/json', ...(opts.headers||{}) }
+  });
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({}));
+    throw new Error(e.error?.message || `HTTP ${r.status}`);
+  }
+  if (r.status === 204) return null;
+  return r.json();
+}
+
+async function getLists() {
+  const d = await api('https://tasks.googleapis.com/tasks/v1/users/@me/lists?maxResults=100');
+  return d.items || [];
+}
+
+async function getTasksForList(lid) {
+  const d = await api(`https://tasks.googleapis.com/tasks/v1/lists/${lid}/tasks?showCompleted=false&maxResults=100`);
+  return (d.items || []).filter(t => !t.parent);
+}
+
+async function createList(title) {
+  return api('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
+    method: 'POST', body: JSON.stringify({ title })
+  });
+}
+
+async function createTask(lid, title) {
+  return api(`https://tasks.googleapis.com/tasks/v1/lists/${lid}/tasks`, {
+    method: 'POST', body: JSON.stringify({ title })
+  });
+}
+
+// ── LIST UI ───────────────────────────────────────
+async function loadLists() {
+  $('lists-container').innerHTML = '<div class="sub-msg">Loading…</div>';
+  try {
+    ST.lists = await getLists();
+    renderLists();
+  } catch (e) {
+    if (e.message.includes('401')) signIn();
+    else $('lists-container').innerHTML = `<div class="sub-msg">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderLists(newId = null) {
+  const c = $('lists-container');
+  if (!ST.lists.length) {
+    c.innerHTML = `
+      <div class="empty-state">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+          <rect x="9" y="3" width="6" height="4" rx="1"/>
+        </svg>
+        <p>No lists yet.<br>Say <em>"add milk to shopping list"</em><br>to create your first one!</p>
+      </div>`;
+    return;
+  }
+  c.innerHTML = ST.lists.map(l => `
+    <div class="list-card${l.id === newId ? ' new highlight' : ''}" id="lc-${l.id}">
+      <div class="list-row" onclick="toggleList('${l.id}')">
+        <div class="list-ico">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+            <rect x="9" y="3" width="6" height="4" rx="1"/>
+            <line x1="9" y1="12" x2="15" y2="12"/>
+            <line x1="9" y1="16" x2="12" y2="16"/>
+          </svg>
+        </div>
+        <div class="list-title">${esc(l.title)}</div>
+        <svg class="list-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <polyline points="9,18 15,12 9,6"/>
+        </svg>
+      </div>
+      <div class="task-area" id="ta-${l.id}">
+        <div class="sub-msg">Loading tasks…</div>
+      </div>
+    </div>`).join('');
+}
+
+async function toggleList(lid) {
+  const card = $(`lc-${lid}`);
+  const area = $(`ta-${lid}`);
+  if (card.classList.contains('open')) { card.classList.remove('open'); return; }
+  card.classList.add('open');
+  area.innerHTML = '<div class="sub-msg">Loading tasks…</div>';
+  try {
+    const tasks = await getTasksForList(lid);
+    if (!tasks.length) { area.innerHTML = '<div class="sub-msg">No tasks yet</div>'; return; }
+    area.innerHTML = tasks.map(t =>
+      `<div class="task-row"><div class="task-dot"></div><span>${esc(t.title)}</span></div>`
+    ).join('');
+  } catch (e) {
+    area.innerHTML = `<div class="sub-msg">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+// ── VOICE ─────────────────────────────────────────
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+function toggleListening() {
+  if (!ST.token) { signIn(); return; }
+  ST.listening ? stopListening() : startListening();
+}
+
+function startListening() {
+  if (!SR) { toast('Voice not available — use Chrome browser'); return; }
+  ST.recog = new SR();
+  ST.recog.lang = 'en-US';
+  ST.recog.interimResults = false;
+  ST.recog.maxAlternatives = 3;
+
+  ST.recog.onstart = () => {
+    ST.listening = true;
+    $('mic-section').classList.add('listening');
+    $('mic-wrap').classList.add('listening');
+    $('mic-label').textContent = 'Listening…';
+  };
+
+  ST.recog.onresult = e => {
+    const alts = [];
+    for (let i = 0; i < e.results[0].length; i++) alts.push(e.results[0][i].transcript);
+    processCommand(alts[0], alts);
+  };
+
+  ST.recog.onerror = e => {
+    stopListening();
+    const msgs = {
+      'no-speech':     'No speech detected — tap to try again',
+      'not-allowed':   'Microphone permission denied — please allow it',
+      'network':       'Network error — check connection',
+      'audio-capture': 'No microphone found',
+      'aborted':       null
+    };
+    const m = msgs[e.error];
+    if (m) setResult(m, 'error');
+  };
+
+  ST.recog.onend = () => {
+    ST.listening = false;
+    $('mic-section').classList.remove('listening');
+    $('mic-wrap').classList.remove('listening');
+    $('mic-label').textContent = 'Tap to speak';
+  };
+
+  ST.recog.start();
+}
+
+function stopListening() {
+  if (ST.recog) ST.recog.stop();
+}
+
+// ── PARSE ─────────────────────────────────────────
+function parseCmd(text) {
+  const t = text.trim();
+
+  // "add X to [my/the] Y [list]"
+  let m = t.match(/^add\s+(.+?)\s+to\s+(?:my\s+|the\s+)?(.+?)(?:\s+list)?$/i);
+  if (m) return make(m[1], m[2]);
+
+  // "put X on [my/the] Y [list]"
+  m = t.match(/^put\s+(.+?)\s+on\s+(?:my\s+|the\s+)?(.+?)(?:\s+list)?$/i);
+  if (m) return make(m[1], m[2]);
+
+  // "X to my Y list"
+  m = t.match(/^(.+?)\s+to\s+(?:my\s+)?(.+?)\s+list$/i);
+  if (m) return make(m[1], m[2]);
+
+  // "X on my Y list"
+  m = t.match(/^(.+?)\s+on\s+(?:my\s+)?(.+?)\s+list$/i);
+  if (m) return make(m[1], m[2]);
+
+  return null;
+}
+
+function make(item, listRaw) {
+  item = item.trim().replace(/^(?:a|an|the)\s+/i, '');
+  item = item.charAt(0).toUpperCase() + item.slice(1);
+  const listName = listRaw.trim().replace(/\s+list$/i, '').trim();
+  return { item, listName };
+}
+
+// ── FUZZY MATCH ───────────────────────────────────
+function matchList(wanted, lists) {
+  if (!lists.length) return null;
+  const n = s => s.toLowerCase().replace(/\s+list$/i,'').trim();
+  const w = n(wanted);
+
+  // 1. exact
+  for (const l of lists) if (n(l.title) === w) return l;
+
+  // 2. substring
+  for (const l of lists) { const t = n(l.title); if (t.includes(w)||w.includes(t)) return l; }
+
+  // 3. word overlap
+  const ww = new Set(w.split(/\s+/).filter(x => x.length > 2));
+  let best = null, bs = 0;
+  for (const l of lists) {
+    const lw = n(l.title).split(/\s+/).filter(x => x.length > 2);
+    const ov = lw.filter(x => ww.has(x)).length;
+    const sc = ov / Math.max(ww.size, lw.length || 1);
+    if (sc > .45 && sc > bs) { bs = sc; best = l; }
+  }
+  return best;
+}
+
+// ── PROCESS COMMAND ───────────────────────────────
+async function processCommand(text, alts = []) {
+  setResult(`Heard: "${text}"`, 'loading');
+
+  let parsed = parseCmd(text);
+  if (!parsed) {
+    for (let i = 1; i < alts.length; i++) {
+      parsed = parseCmd(alts[i]);
+      if (parsed) break;
+    }
+  }
+
+  if (!parsed) {
+    setResult(`Didn't understand. Try: "add eggs to shopping list"`, 'error');
+    return;
+  }
+
+  setResult(`Adding "${parsed.item}"…`, 'loading');
+
+  try {
+    ST.lists = await getLists();
+    let lst = matchList(parsed.listName, ST.lists);
+    let created = false;
+
+    if (!lst) {
+      const title = parsed.listName.replace(/\b\w/g, c => c.toUpperCase());
+      lst = await createList(title);
+      created = true;
+      ST.lists = await getLists();
+    }
+
+    await createTask(lst.id, parsed.item);
+
+    const msg = created
+      ? `Created "${lst.title}" and added "${parsed.item}"`
+      : `Added "${parsed.item}" to "${lst.title}"`;
+    setResult(msg, 'success');
+    renderLists(created ? lst.id : null);
+
+  } catch (e) {
+    console.error(e);
+    if (e.message.includes('401')) {
+      signIn();
+      setResult('Session expired — signing in again', 'error');
+    } else {
+      setResult('Error: ' + e.message, 'error');
+    }
+  }
+}
+
+// ── HELPERS ───────────────────────────────────────
+function setResult(msg, type) {
+  const card = $('result-card');
+  card.style.display = 'flex';
+  card.className = 'result-card ' + type;
+  const icons = {
+    success: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1fd874" stroke-width="2.5" stroke-linecap="round"><polyline points="20,6 9,17 4,12"/></svg>`,
+    error:   `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f05050" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+    loading: `<div class="spin"></div>`,
+    info:    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5a6a85" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`
+  };
+  $('result-icon').innerHTML = icons[type] || icons.info;
+  $('result-text').textContent = msg;
+}
+
+function toast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  $('toasts').appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── SERVICE WORKER ────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
