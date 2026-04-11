@@ -479,7 +479,7 @@
       <line x1="30" y1="42" x2="30" y2="48" stroke="#1fd874" stroke-width="2.5" stroke-linecap="round"/>
       <line x1="24" y1="48" x2="36" y2="48" stroke="#1fd874" stroke-width="2.5" stroke-linecap="round"/>
     </svg>
-    <h1>Voice<span>List</span></h1>
+    <h1>Voice<span>Todo</span></h1>
     <p>"add milk to my shopping list"</p>
   </div>
 
@@ -543,7 +543,7 @@
   </div>
 
   <div class="app-header">
-    <div class="app-name">Voice<em>List</em></div>
+    <div class="app-name">Voice<em>Todo</em></div>
     <div class="icon-btn" onclick="handleLogout()" title="Sign out">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
@@ -882,8 +882,14 @@ function stopListening() {
 function parseCmd(text) {
   const t = text.trim();
 
+  // "create [a/new] list X" or "create X list"
+  let m = t.match(/^create\s+(?:a\s+|new\s+|a\s+new\s+)?list\s+(.+)$/i);
+  if (m) return { item: null, listName: m[1].trim() };
+  m = t.match(/^create\s+(.+?)\s+list$/i);
+  if (m) return { item: null, listName: m[1].trim() };
+
   // "add X to [my/the] Y [list]"
-  let m = t.match(/^add\s+(.+?)\s+to\s+(?:my\s+|the\s+)?(.+?)(?:\s+list)?$/i);
+  m = t.match(/^add\s+(.+?)\s+to\s+(?:my\s+|the\s+)?(.+?)(?:\s+list)?$/i);
   if (m) return make(m[1], m[2]);
 
   // "put X on [my/the] Y [list]"
@@ -946,6 +952,28 @@ async function processCommand(text, alts = []) {
 
   if (!parsed) {
     setResult(`Didn't understand. Try: "add eggs to shopping list"`, 'error');
+    return;
+  }
+
+  // create-list-only command
+  if (parsed.item === null) {
+    setResult(`Creating list "${parsed.listName}"…`, 'loading');
+    try {
+      ST.lists = await getLists();
+      const existing = matchList(parsed.listName, ST.lists);
+      if (existing) {
+        setResult(`List "${existing.title}" already exists`, 'success');
+      } else {
+        const title = parsed.listName.replace(/\b\w/g, c => c.toUpperCase());
+        await createList(title);
+        ST.lists = await getLists();
+        setResult(`Created list "${title}"`, 'success');
+        renderLists();
+      }
+    } catch (e) {
+      console.error(e);
+      setResult('Error creating list', 'error');
+    }
     return;
   }
 
@@ -1016,3 +1044,4 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
+
