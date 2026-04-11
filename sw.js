@@ -1,5 +1,5 @@
-const CACHE = 'voicetodo-v3';
-const PRECACHE = ['/index.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
+const CACHE = 'voicetodo-v4';
+const PRECACHE = ['/voicetodo/', '/voicetodo/index.html', '/voicetodo/manifest.json', '/voicetodo/icons/icon-192.png', '/voicetodo/icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
