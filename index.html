@@ -723,13 +723,15 @@ function initOAuth(clientId) {
     scope: 'https://www.googleapis.com/auth/tasks',
     callback: onToken
   });
+  // attempt silent sign-in on load — no popup if already consented
+  tokenClient.requestAccessToken({ prompt: '' });
 }
 
 function onToken(r) {
   if (r.error) {
-    if (r.error !== 'user_closed_window' && r.error !== 'access_denied') {
-      toast('Sign-in error: ' + r.error);
-    }
+    // silent errors (no consent yet, or closed) — just leave sign-in button visible
+    const silent = ['user_closed_window', 'access_denied', 'immediate_failed'];
+    if (!silent.includes(r.error)) toast('Sign-in error: ' + r.error);
     return;
   }
   ST.token = r.access_token;
