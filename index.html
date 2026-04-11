@@ -735,7 +735,8 @@ function onToken(r) {
     return;
   }
   ST.token = r.access_token;
-  ST.tokenExpiry = Date.now() + (parseInt(r.expires_in) * 1000) - 60000;
+  const exp = parseInt(r.expires_in) || 3600;
+  ST.tokenExpiry = Date.now() + (exp * 1000) - 60000;
   showConnectOverlay(false);
   loadLists();
 }
@@ -886,7 +887,7 @@ async function loadTasksIntoArea(lid, area) {
   }
 }
 
-function renderTaskArea(lid, area, tasks) {
+function renderTaskArea(lid, area, tasks, keepCompletedOpen) {
   const active = tasks.filter(t => t.status !== 'completed');
   const done   = tasks.filter(t => t.status === 'completed');
 
@@ -903,12 +904,13 @@ function renderTaskArea(lid, area, tasks) {
   let html = active.length ? active.map(taskRow).join('') : '<div class="sub-msg">No tasks yet</div>';
 
   if (done.length) {
+    const open = keepCompletedOpen ? ' open' : '';
     html += `
-      <div class="completed-toggle" onclick="toggleCompleted(this)">
+      <div class="completed-toggle${open}" onclick="toggleCompleted(this)">
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9,18 15,12 9,6"/></svg>
         ${done.length} completed
       </div>
-      <div class="completed-section">${done.map(taskRow).join('')}</div>`;
+      <div class="completed-section${open}">${done.map(taskRow).join('')}</div>`;
   }
 
   area.innerHTML = html;
@@ -931,8 +933,9 @@ async function onCheckTask(e, lid, tid) {
   try {
     await completeTask(lid, tid);
     const area = row.closest('.task-area');
+    const wasOpen = area.querySelector('.completed-toggle.open') !== null;
     const tasks = await getTasksForList(lid);
-    renderTaskArea(lid, area, tasks);
+    renderTaskArea(lid, area, tasks, wasOpen);
   } catch(err) {
     row.classList.remove('completed');
     toast('Error updating task');
@@ -1024,9 +1027,10 @@ function parseCmd(text) {
 }
 
 function make(item, listRaw) {
-  item = item.trim().replace(/^(?:a|an|the)\s+/i, '');
-  item = item.charAt(0).toUpperCase() + item.slice(1);
+  item = item.trim().replace(/^(?:a|an|the)\s+/i, '').trim();
   const listName = listRaw.trim().replace(/\s+list$/i, '').trim();
+  if (!item || !listName) return null;
+  item = item.charAt(0).toUpperCase() + item.slice(1);
   return { item, listName };
 }
 
@@ -1155,13 +1159,18 @@ function esc(s) {
 
 // ── LONG PRESS ────────────────────────────────────
 function attachLongPress(el, cb) {
-  let timer = null;
+  let timer = null, startX = 0, startY = 0;
   el.addEventListener('pointerdown', e => {
+    startX = e.clientX; startY = e.clientY;
     timer = setTimeout(() => { timer = null; cb(e); }, 500);
   });
   el.addEventListener('pointerup',    () => { if (timer) { clearTimeout(timer); timer = null; } });
   el.addEventListener('pointercancel',() => { if (timer) { clearTimeout(timer); timer = null; } });
-  el.addEventListener('pointermove',  () => { if (timer) { clearTimeout(timer); timer = null; } });
+  el.addEventListener('pointermove',  e => {
+    if (!timer) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (Math.sqrt(dx*dx + dy*dy) > 10) { clearTimeout(timer); timer = null; }
+  });
 }
 
 // ── CONTEXT MENU ──────────────────────────────────
@@ -1206,8 +1215,9 @@ async function onDeleteTask(lid, tid, row) {
   try {
     await deleteTask(lid, tid);
     const area = row.closest('.task-area');
+    const wasOpen = area.querySelector('.completed-toggle.open') !== null;
     const tasks = await getTasksForList(lid);
-    renderTaskArea(lid, area, tasks);
+    renderTaskArea(lid, area, tasks, wasOpen);
     toast('Task deleted');
   } catch(e) { toast('Error deleting task'); }
 }

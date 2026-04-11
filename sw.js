@@ -30,7 +30,7 @@ self.addEventListener('fetch', e => {
       const network = fetch(e.request).then(res => {
         if (res.ok && url.origin === self.location.origin) {
           const clone = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
+          caches.open(CACHE).then(c => c.put(e.request, clone)).catch(() => {});
         }
         return res;
       }).catch(() => cached);

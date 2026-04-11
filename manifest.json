@@ -3,19 +3,20 @@
   "short_name": "VoiceTodo",
   "description": "Voice-controlled todo manager synced with Google Tasks",
   "start_url": "/voicetodo/index.html",
+  "scope": "/voicetodo/",
   "display": "standalone",
   "background_color": "#0b0f18",
   "theme_color": "#0b0f18",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "icons/icon-192.png",
+      "src": "/voicetodo/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icons/icon-512.png",
+      "src": "/voicetodo/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
