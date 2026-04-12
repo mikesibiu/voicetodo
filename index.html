@@ -506,6 +506,97 @@
 
     ::-webkit-scrollbar { width: 3px; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* EDIT SHEET */
+    .sheet-backdrop {
+      position: fixed; inset: 0; z-index: 300;
+      background: rgba(0,0,0,.55);
+      opacity: 0; pointer-events: none;
+      transition: opacity .25s;
+    }
+    .sheet-backdrop.open { opacity: 1; pointer-events: all; }
+    .edit-sheet {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      z-index: 301;
+      background: var(--surface);
+      border-radius: 18px 18px 0 0;
+      border-top: 1px solid var(--border);
+      padding: 20px 20px 36px;
+      transform: translateY(100%);
+      transition: transform .28s cubic-bezier(.32,.72,0,1);
+    }
+    .edit-sheet.open { transform: translateY(0); }
+    .sheet-handle {
+      width: 36px; height: 4px;
+      background: var(--border);
+      border-radius: 4px;
+      margin: 0 auto 18px;
+    }
+    .sheet-title { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    .sheet-input {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px 13px;
+      font-size: 15px;
+      color: var(--text);
+      font-family: inherit;
+      outline: none;
+      margin-bottom: 14px;
+    }
+    .sheet-input:focus { border-color: var(--green); }
+    .due-row {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 13px;
+      margin-bottom: 16px;
+      min-height: 44px;
+    }
+    .due-row svg { color: var(--muted); flex-shrink: 0; }
+    .due-text { flex: 1; font-size: 14px; color: var(--muted); }
+    .due-text.set { color: var(--green); }
+    .due-mic {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      background: var(--green-bg);
+      border: none;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      color: var(--green);
+      flex-shrink: 0;
+    }
+    .due-mic.listening { background: var(--green); color: #000; animation: pulse .8s ease-in-out infinite; }
+    .due-clear {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      color: var(--muted);
+      flex-shrink: 0;
+      font-size: 13px;
+    }
+    .sheet-btns { display: flex; gap: 10px; }
+    .sheet-btn {
+      flex: 1; padding: 12px;
+      border-radius: 10px; border: none;
+      font-size: 15px; font-weight: 600;
+      cursor: pointer; font-family: inherit;
+    }
+    .sheet-btn.save { background: var(--green); color: #000; }
+    .sheet-btn.cancel { background: var(--surface2); color: var(--text); }
+    /* Due date badge on task row */
+    .task-due {
+      font-size: 11px; color: var(--muted);
+      display: block; margin-top: 2px;
+    }
+    .task-due.overdue { color: var(--red); }
+    .task-body { flex: 1; min-width: 0; cursor: pointer; }
+    .task-body span { display: block; }
   </style>
 </head>
 <body>
@@ -634,6 +725,33 @@
 </div>
 
 <div id="toasts"></div>
+
+<!-- EDIT SHEET -->
+<div class="sheet-backdrop" id="sheet-backdrop" onclick="closeEditSheet()"></div>
+<div class="edit-sheet" id="edit-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title">Task title</div>
+  <input id="edit-title" class="sheet-input" type="text" placeholder="Task title">
+  <div class="sheet-title">Reminder</div>
+  <div class="due-row">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
+    </svg>
+    <div class="due-text" id="due-text">No reminder set</div>
+    <div class="due-clear" id="due-clear" onclick="clearDue()" style="display:none">✕</div>
+    <button class="due-mic" id="due-mic" onclick="toggleDueMic()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+        <rect x="9" y="2" width="6" height="11" rx="3"/>
+        <path d="M19 10v2a7 7 0 01-14 0v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+        <line x1="12" y1="19" x2="12" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+      </svg>
+    </button>
+  </div>
+  <div class="sheet-btns">
+    <button class="sheet-btn cancel" onclick="closeEditSheet()">Cancel</button>
+    <button class="sheet-btn save" onclick="saveEdit()">Save</button>
+  </div>
+</div>
 
 <!-- ═══════════════════════════════════════════════ -->
 <!--  JAVASCRIPT                                    -->
@@ -814,6 +932,229 @@ async function deleteList(lid) {
   return api(`https://tasks.googleapis.com/tasks/v1/users/@me/lists/${lid}`, { method: 'DELETE' });
 }
 
+async function updateTask(lid, tid, fields) {
+  return api(`https://tasks.googleapis.com/tasks/v1/lists/${lid}/tasks/${tid}`, {
+    method: 'PATCH', body: JSON.stringify(fields)
+  });
+}
+
+// ── REMIND HELPERS ────────────────────────────────
+function extractRemind(notes) {
+  if (!notes) return null;
+  const m = notes.match(/\[remind:\s*([^\]]+)\]/);
+  return m ? m[1].trim() : null;
+}
+
+function setRemind(notes, iso) {
+  const base = (notes || '').replace(/\[remind:[^\]]*\]\s*/g, '').trim();
+  return iso ? `[remind: ${iso}]${base ? '\n' + base : ''}` : base;
+}
+
+function formatDueLabel(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  const dDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  if (dDay.getTime() === today.getTime()) return `Today ${time}`;
+  if (dDay.getTime() === tomorrow.getTime()) return `Tomorrow ${time}`;
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const diff = Math.round((dDay - today) / 86400000);
+  if (diff > 0 && diff < 7) return `${days[d.getDay()]} ${time}`;
+  return d.toLocaleDateString([], { month:'short', day:'numeric' }) + ' ' + time;
+}
+
+// ── DATE/TIME VOICE PARSER ────────────────────────
+function parseDueDateTime(text) {
+  const t = text.toLowerCase().trim();
+  const now = new Date();
+  const result = new Date(now);
+
+  // extract time: "3pm", "3:30pm", "15:00", "8 am"
+  const timeRe = /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b|(\d{2}):(\d{2})\b/i;
+  const tm = t.match(timeRe);
+  let hours = null, mins = 0;
+  if (tm) {
+    if (tm[4] !== undefined) { // 24h
+      hours = parseInt(tm[4]); mins = parseInt(tm[5]);
+    } else {
+      hours = parseInt(tm[1]); mins = tm[2] ? parseInt(tm[2]) : 0;
+      const mer = tm[3].toLowerCase();
+      if (mer === 'pm' && hours < 12) hours += 12;
+      if (mer === 'am' && hours === 12) hours = 0;
+    }
+  }
+
+  // extract day
+  const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+  let targetDate = null;
+
+  if (/\btoday\b/.test(t)) {
+    targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  } else if (/\btomorrow\b/.test(t)) {
+    targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  } else if (/\btonight\b/.test(t)) {
+    targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (hours === null) hours = 21;
+  } else if (/\bin\s+(\d+)\s+hour/.test(t)) {
+    const h = parseInt(t.match(/in\s+(\d+)\s+hour/)[1]);
+    result.setHours(result.getHours() + h); return result.toISOString();
+  } else if (/\bin\s+(\d+)\s+min/.test(t)) {
+    const m2 = parseInt(t.match(/in\s+(\d+)\s+min/)[1]);
+    result.setMinutes(result.getMinutes() + m2); return result.toISOString();
+  } else {
+    // named day: "wednesday", "next friday"
+    for (let i = 0; i < dayNames.length; i++) {
+      if (t.includes(dayNames[i])) {
+        const cur = now.getDay();
+        let diff = i - cur;
+        if (diff <= 0 || t.includes('next')) diff += 7;
+        targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
+        break;
+      }
+    }
+    // "april 20", "20th", month day
+    if (!targetDate) {
+      const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+      for (let mi = 0; mi < months.length; mi++) {
+        if (t.includes(months[mi])) {
+          const dm = t.match(/\b(\d{1,2})\b/);
+          const day = dm ? parseInt(dm[1]) : now.getDate();
+          let yr = now.getFullYear();
+          const d2 = new Date(yr, mi, day);
+          if (d2 < now) d2.setFullYear(yr + 1);
+          targetDate = d2; break;
+        }
+      }
+    }
+  }
+
+  if (!targetDate) return null;
+  result.setFullYear(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+  result.setHours(hours !== null ? hours : 9, mins, 0, 0);
+  return result.toISOString();
+}
+
+// ── EDIT SHEET ────────────────────────────────────
+let editState = { lid: null, tid: null, task: null, remindIso: null, dueMicRecog: null };
+
+function openEditSheet(lid, tid) {
+  const row = document.getElementById(`tr-${tid}`);
+  if (!row) return;
+  // find task data from the open list
+  const area = row.closest('.task-area');
+  const title = row.querySelector('.task-body span').textContent;
+  const existingRemind = extractRemind(null); // will fetch below
+  editState = { lid, tid, remindIso: null };
+  $('edit-title').value = title;
+  // try to get notes from cached tasks (re-fetch if needed)
+  fetchTaskNotes(lid, tid).then(notes => {
+    const iso = extractRemind(notes);
+    editState.remindIso = iso || null;
+    editState.notes = notes || '';
+    updateDueDisplay();
+  });
+  $('sheet-backdrop').classList.add('open');
+  $('edit-sheet').classList.add('open');
+  setTimeout(() => $('edit-title').focus(), 300);
+}
+
+async function fetchTaskNotes(lid, tid) {
+  try {
+    const t = await api(`https://tasks.googleapis.com/tasks/v1/lists/${lid}/tasks/${tid}`);
+    return t.notes || '';
+  } catch { return ''; }
+}
+
+function closeEditSheet() {
+  $('sheet-backdrop').classList.remove('open');
+  $('edit-sheet').classList.remove('open');
+  stopDueMic();
+}
+
+function updateDueDisplay() {
+  const iso = editState.remindIso;
+  const txt = $('due-text');
+  const clr = $('due-clear');
+  if (iso) {
+    txt.textContent = formatDueLabel(iso) || iso;
+    txt.className = 'due-text set';
+    clr.style.display = 'flex';
+  } else {
+    txt.textContent = 'No reminder set — tap mic to speak';
+    txt.className = 'due-text';
+    clr.style.display = 'none';
+  }
+}
+
+function clearDue() {
+  editState.remindIso = null;
+  updateDueDisplay();
+}
+
+async function saveEdit() {
+  const title = $('edit-title').value.trim();
+  if (!title) { toast('Title cannot be empty'); return; }
+  const { lid, tid } = editState;
+  const newNotes = setRemind(editState.notes || '', editState.remindIso);
+  const fields = { title };
+  if (editState.remindIso) {
+    // Google Tasks due is date-only (midnight UTC of that day)
+    const d = new Date(editState.remindIso);
+    fields.due = new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString().replace(/T.*/, 'T00:00:00.000Z');
+  }
+  if (newNotes !== undefined) fields.notes = newNotes;
+  try {
+    await updateTask(lid, tid, fields);
+    closeEditSheet();
+    // refresh the open list
+    const area = document.getElementById(`ta-${lid}`);
+    if (area) {
+      const wasOpen = area.querySelector('.completed-toggle.open') !== null;
+      const tasks = await getTasksForList(lid);
+      renderTaskArea(lid, area, tasks, wasOpen);
+    }
+    toast('Saved');
+  } catch(e) { toast('Error saving task'); }
+}
+
+// ── DUE DATE MIC ──────────────────────────────────
+function toggleDueMic() {
+  if (editState.dueMicRecog) { stopDueMic(); return; }
+  const SR2 = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR2) { toast('Speech not supported'); return; }
+  const r = new SR2();
+  r.lang = 'en-US'; r.interimResults = false; r.maxAlternatives = 3;
+  r.onstart = () => {
+    editState.dueMicRecog = r;
+    $('due-mic').classList.add('listening');
+    $('due-text').textContent = 'Listening…';
+    $('due-text').className = 'due-text';
+  };
+  r.onresult = e => {
+    const alts = Array.from(e.results[0]).map(a => a.transcript);
+    let iso = null;
+    for (const alt of alts) { iso = parseDueDateTime(alt); if (iso) break; }
+    if (iso) {
+      editState.remindIso = iso;
+      updateDueDisplay();
+    } else {
+      toast(`Didn't understand "${alts[0]}" — try "Wednesday at 3pm"`);
+      updateDueDisplay();
+    }
+  };
+  r.onerror = () => { stopDueMic(); updateDueDisplay(); };
+  r.onend = () => stopDueMic();
+  r.start();
+}
+
+function stopDueMic() {
+  if (editState.dueMicRecog) { try { editState.dueMicRecog.stop(); } catch {} editState.dueMicRecog = null; }
+  $('due-mic').classList.remove('listening');
+}
+
 async function createList(title) {
   return api('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
     method: 'POST', body: JSON.stringify({ title })
@@ -897,15 +1238,23 @@ function renderTaskArea(lid, area, tasks, keepCompletedOpen) {
   const active = tasks.filter(t => t.status !== 'completed');
   const done   = tasks.filter(t => t.status === 'completed');
 
-  const taskRow = (t) => `
+  const taskRow = (t) => {
+    const remind = extractRemind(t.notes);
+    const dueLabel = remind ? formatDueLabel(remind) : '';
+    const overdue = remind && new Date(remind) < new Date() && t.status !== 'completed';
+    return `
     <div class="task-row${t.status === 'completed' ? ' completed' : ''}" id="tr-${t.id}" data-tid="${t.id}" data-lid="${lid}">
       <div class="task-check" onclick="onCheckTask(event,'${lid}','${t.id}')">
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round">
           <polyline points="2,6 5,9 10,3"/>
         </svg>
       </div>
-      <span>${esc(t.title)}</span>
+      <div class="task-body" onclick="openEditSheet('${lid}','${t.id}')">
+        <span>${esc(t.title)}</span>
+        ${dueLabel ? `<span class="task-due${overdue ? ' overdue' : ''}">${esc(dueLabel)}</span>` : ''}
+      </div>
     </div>`;
+  };
 
   let html = active.length ? active.map(taskRow).join('') : '<div class="sub-msg">No tasks yet</div>';
 
