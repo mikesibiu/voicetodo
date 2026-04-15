@@ -847,9 +847,13 @@ function initOAuth(clientId) {
 
 function onToken(r) {
   if (r.error) {
-    // silent errors (no consent yet, or closed) — just leave sign-in button visible
-    const silent = ['user_closed_window', 'access_denied', 'immediate_failed'];
-    if (!silent.includes(r.error)) toast('Sign-in error: ' + r.error);
+    if (r.error === 'immediate_failed') {
+      // Silent auth failed — auto-trigger the account picker instead of waiting for user to tap
+      tokenClient.requestAccessToken({ prompt: 'select_account' });
+      return;
+    }
+    // user_closed_window / access_denied — leave sign-in button visible
+    if (!['user_closed_window', 'access_denied'].includes(r.error)) toast('Sign-in error: ' + r.error);
     return;
   }
   ST.token = r.access_token;
